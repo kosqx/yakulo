@@ -5,14 +5,15 @@
 import os
 import sys
 import time
-import getopt
+import optparse
 import subprocess
 
 
 FILE_PATH = '~/.yakulo'
+VERSION = '0.1'
 
 
-def load_file(filename):
+def load_script(filename):
     f = open(filename)
     result = []
     create = None
@@ -122,14 +123,12 @@ class DbusCmdYakuake(Yakuake):
         return []
 
 
-def load(filename):
-    conf = load_file(filename)
-    print conf
+def load(script):
     yaku = Yakuake.get()
     
     yaku.show()
     
-    for create, name, commands in conf:
+    for create, name, commands in script:
         if create:
             yaku.addSession()
         nr = yaku.getCurrent()
@@ -145,13 +144,26 @@ def load(filename):
 
 
 if __name__ == '__main__':
-    optlist, args = getopt.getopt(sys.argv, '')
+    parser = optparse.OptionParser(usage="usage: %prog [options] [scripts]")
+
+    parser.version = '%prog version ' + VERSION
+    parser.add_option("-v", "--version", action="version", help="show version")
+
+    parser.add_option("-p", "--parse",
+         action="store_true",
+         dest="parse",
+         default=False,
+         help="print parsed script to stdout and exit"
+    )
+
+    (options, args) = parser.parse_args()
     
-    if len(args) == 1:
-        name = 'default'
-    else:
-        name = args[1]
-    
+    name = 'default' if len(args) == 0 else args[0]
     path = os.path.join(os.path.expanduser(FILE_PATH), name)
-    load(path)
+    script = load_script(path)
+    
+    if options.parse:
+        print script
+    else:
+        load(script)
 
