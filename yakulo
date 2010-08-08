@@ -38,7 +38,7 @@ def read_scripts(filenames):
     for filename in filenames:
         for line in read_lines(filename):
             striped = line.strip()
-            if line.startswith('#') or not striped:
+            if striped.startswith('#') or not striped:
                 pass
             elif striped.startswith(':include'):
                 script = read_scripts(line.split()[1:])
@@ -185,14 +185,29 @@ if __name__ == '__main__':
          default=False,
          help="print parsed script to stdout and exit"
     )
-
+    parser.add_option("-n", "--new",
+         action="store_true",
+         dest="new",
+         default=False,
+         help="create new session for first tabs"
+    )
+    
     (options, args) = parser.parse_args()
     
     names = ['default'] if len(args) == 0 else args
-    
     script = read_scripts(names)
+    
     if options.parse:
         format_script(script)
     else:
-        load(script, True)
-    
+        if not options.new:
+            try:
+                pid = os.fork()
+            except OSError, e:
+                raise Exception, "%s [%d]" % (e.strerror, e.errno)
+            
+            if pid != 0:
+                os._exit(0)
+        
+        load(script, options.new)
+
