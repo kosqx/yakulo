@@ -7,11 +7,16 @@ import sys
 import time
 import optparse
 import urllib2
+import inspect
 import subprocess
 
 
 FILE_PATH = '~/.yakulo'
 VERSION = '0.2'
+
+
+class YakuloError(Exception):
+    pass
 
 
 def read_lines(name):
@@ -54,13 +59,13 @@ def read_scripts(filenames):
                 result[-1][1].append(line.strip())
     
     return result
-    
+
+
 def format_script(script):
     for name, commands in script:
         print ':tab', name
         for command in commands:
             print '    %s' % command
-    
 
 
 def cmd(args):
@@ -68,11 +73,19 @@ def cmd(args):
     return output
 
 
+def cmd_try(args):
+    try:
+        retcode = subprocess.call([str(i) for i in args], shell=False, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    except OSError:
+        retcode = -1
+    return retcode
+
+
 class Yakuake(object):
     @staticmethod
-    def get():
-        return DbusCmdYakuake()
-
+    def available():
+        pass
+    
     def show(self):
         pass
     
@@ -90,6 +103,12 @@ class Yakuake(object):
 
 
 class DcopCmdYakuake(Yakuake):
+    priority = 2.5
+    
+    @staticmethod
+    def available():
+        return cmd_try('dcop yakuake'.split()) == 0
+    
     def show(self):
         active = cmd('dcop yakuake yakuake-mainwindow#1 isActiveWindow'.split()).strip()
         if active == 'false':
@@ -110,7 +129,7 @@ class DcopCmdYakuake(Yakuake):
     
     def runCommand(self, nr, command):
         cmd('dcop yakuake DCOPInterface slotRunCommandInSession'.split() + [nr, command])
-
+    
     def enterText(self, text):
         cmd('dcop klipper klipper setClipboardContents'.split() + [text+ '\n'])
         cmd('dcop yakuake DCOPInterface slotPasteClipboard'.split())
@@ -121,6 +140,12 @@ class DcopCmdYakuake(Yakuake):
 
 
 class DbusCmdYakuake(Yakuake):
+    priority = 1.5
+    
+    @staticmethod
+    def available():
+        return cmd_try('qdbus org.kde.yakuake'.split()) == 0
+    
     def show(self):
         pass
     
@@ -140,7 +165,7 @@ class DbusCmdYakuake(Yakuake):
     def runCommand(self, nr, command):
         tid = cmd('qdbus org.kde.yakuake /yakuake/sessions terminalIdsForSessionId'.split() + [nr]).split(',')[0].strip()
         cmd('qdbus org.kde.yakuake /yakuake/sessions runCommandInTerminal'.split() + [tid, command])
-
+    
     def enterText(self, text):
         nr = cmd('qdbus org.kde.yakuake /yakuake/sessions activeSessionId'.split())
         tid = cmd('qdbus org.kde.yakuake /yakuake/sessions terminalIdsForSessionId'.split() + [nr]).split(',')[0]
@@ -150,8 +175,24 @@ class DbusCmdYakuake(Yakuake):
         return []
 
 
-def load(script, new):
-    yaku = Yakuake.get()
+def get_class():
+    classes = inspect.getmembers(sys.modules[__name__], inspect.isclass)
+    classes = [(cls.priority, cls) for cls_name, cls in classes if hasattr(cls, 'priority')]
+    classes.sort()
+    
+    klass = None
+    for priority, cls in classes:
+        if cls.available():
+            klass = cls
+            break
+    
+    if klass is None:
+        raise YakuloError('No Yakuake is running')
+    else:
+        return klass()
+
+
+def load(yaku, script, new):
     yaku.show()
     
     for  name, commands in script:
@@ -173,12 +214,12 @@ def load(script, new):
                 yaku.runCommand(nr, command)
 
 
-if __name__ == '__main__':
+def main():
     parser = optparse.OptionParser(usage="usage: %prog [options] [scripts]")
-
+    
     parser.version = '%prog version ' + VERSION
     parser.add_option("-v", "--version", action="version", help="show version")
-
+    
     parser.add_option("-p", "--parse",
          action="store_true",
          dest="parse",
@@ -197,6 +238,8 @@ if __name__ == '__main__':
     names = ['default'] if len(args) == 0 else args
     script = read_scripts(names)
     
+    yaku = get_class()
+    
     if options.parse:
         format_script(script)
     else:
@@ -209,5 +252,12 @@ if __name__ == '__main__':
             if pid != 0:
                 os._exit(0)
         
-        load(script, options.new)
+        load(yaku, script, options.new)
+
+
+if __name__ == '__main__':
+    try:
+        main()
+    except YakuloError, e:
+        print >> sys.stderr, e.args[0]
 
