@@ -6,34 +6,61 @@ import os
 import sys
 import time
 import optparse
+import urllib2
 import subprocess
 
 
 FILE_PATH = '~/.yakulo'
-VERSION = '0.1'
+VERSION = '0.2'
 
 
-def load_script(filename):
-    f = open(filename)
-    result = []
-    create = None
-    name = ''
-    lst = []
-    for line in f:
-        if line.startswith('#') or not line.strip():
-            pass
-        elif line.startswith(':'):
-            if name:
-                result.append([create, name, lst])
-            parts = line.split(' ', 1)
-            create = parts[0][1:].lower() != 'rename'
-            name = parts[1].strip()
-            lst = []
+def read_lines(name):
+    if name.startswith(('http://', 'ftp://')):
+        f = urllib2.urlopen(name)
+        data = f.read()
+        f.close()
+    else:
+        if '/' in name:
+            path = os.path.abspath(os.path.expanduser(name))
         else:
-            lst.append(line.strip())
-    result.append([create, name, lst])
-    f.close()
+            path = os.path.join(os.path.expanduser(FILE_PATH), name)
+        
+        f = open(path)
+        data = f.read()
+        f.close()
+    
+    return data.splitlines()
+
+
+def read_scripts(filenames):
+    result = [[None, []]]
+    
+    for filename in filenames:
+        for line in read_lines(filename):
+            striped = line.strip()
+            if line.startswith('#') or not striped:
+                pass
+            elif striped.startswith(':include'):
+                script = read_scripts(line.split()[1:])
+                if script[0][0] is None:
+                    result[-1][1].extend(script[0][1])
+                    script = script[1:]
+                result.extend(script)
+            elif line.startswith(':tab'):
+                if result[-1] == [None, []]:
+                    result.pop()
+                result.append([line.split(' ', 1)[1].strip(), []])
+            else:
+                result[-1][1].append(line.strip())
+    
     return result
+    
+def format_script(script):
+    for name, commands in script:
+        print ':tab', name
+        for command in commands:
+            print '    %s' % command
+    
 
 
 def cmd(args):
@@ -123,16 +150,19 @@ class DbusCmdYakuake(Yakuake):
         return []
 
 
-def load(script):
+def load(script, new):
     yaku = Yakuake.get()
-    
     yaku.show()
     
-    for create, name, commands in script:
-        if create:
+    for  name, commands in script:
+        if new:
             yaku.addSession()
+        new = True
+        
         nr = yaku.getCurrent()
-        yaku.setName(nr, name)
+        if name is not None:
+            yaku.setName(nr, name)
+        
         for command in commands:
             if command.startswith('yak-sleep'):
                 sleep = float((command.split() + ['1.0'])[1])
@@ -158,12 +188,11 @@ if __name__ == '__main__':
 
     (options, args) = parser.parse_args()
     
-    name = 'default' if len(args) == 0 else args[0]
-    path = os.path.join(os.path.expanduser(FILE_PATH), name)
-    script = load_script(path)
+    names = ['default'] if len(args) == 0 else args
     
+    script = read_scripts(names)
     if options.parse:
-        print script
+        format_script(script)
     else:
-        load(script)
-
+        load(script, True)
+    
