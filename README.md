@@ -23,3 +23,8 @@ Then run script:
 
     yakulo foo
 
+## Troubleshooting
+
+If you are running new versions of Kubuntu and you are getting message "No Yakuake is running" then you encounter the problem with `qdbus`. You can fix it by issuing command:
+
+    sudo apt-get install qt4-default
