@@ -34,7 +34,7 @@ import inspect
 import subprocess
 
 
-FILE_PATH = '~/.yakulo'
+FILE_PATH = '~/.config/yakulo'
 VERSION = '0.2'
 
 
@@ -283,4 +283,3 @@ if __name__ == '__main__':
         main()
     except YakuloError, e:
         print >> sys.stderr, e.args[0]
-

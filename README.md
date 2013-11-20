@@ -11,7 +11,7 @@ Yakuake session loader (yakulo = YAKUake LOader)
 
 ## Quick Start
 
-Create file named ~/.yakulo/foo with content like:
+Create file `~/.config/yakulo/foo` with content:
 
     # this is comment
     :tab First tab name
